@@ -1,10 +1,3 @@
-//--------------------------------------------------------------
-//  Aulas Online - Arduino
-//  Programa/hardware: 008 - Contador simples
-//  Autor: Clodoaldo Silva
-//  Revisão: 27Set2020
-//---------------------------------------------------------------
-
 #include <LiquidCrystal.h>  // Biblioteca para controlar o display LCD
 
 //---------------------------------------------------------------
@@ -26,7 +19,7 @@ LiquidCrystal lcd(7, 6, 5, 4, 3, 2);
 
 // Definindo variáveis
 bool continuo = 0;         // Variável para controlar se os dados serão enviados continuamente
-double emissivity = 0.95;  // Emissividade padrão dos sensores
+double emissivity = 0.95;  //parametro de emissividade do sensor. emissividade é a capacidade de um corpo de emitir radiação térmica. o intervalo vai de 0 a 1 - 0 é um corpo perfeitamente refletor e 1 é um corpo perfeitamente emissor.
 String dados;              // String para armazenar dados da comunicação serial
 char subcomando = 'c';     // Variável para armazenar subcomandos
 // Array que desenha o símbolo de grau no display LCD
@@ -63,11 +56,11 @@ void setup()
   lcd.createChar(1, grau);
 
   // Mostra informações iniciais no display
-  lcd.setCursor(0, 0);
-  lcd.print("      DFTE      ");
-  lcd.setCursor(0, 1);
-  lcd.print("    MLX90614    ");
-  delay(4000);  // Aguarda 4 segundos antes de limpar a tela
+  lcd.setCursor(0, 0); //setamos o cursor para escrever a partir da coluna 0 e linha 0 (primeiro caractere, primeira linha)
+  lcd.print("      DFTE      "); //note que o display tem 16 colunas, então o texto deve ter no máximo 16 caracteres, incluindo espaços. aqui temos 6 espaços antes e 6 espaços depois do texto para centralizar o texto no display
+  lcd.setCursor(0, 1); //setamos o cursor para escrever a partir da coluna 0 e linha 1 (primeiro caractere, segunda linha)
+  lcd.print("    MLX90614    "); // o mesmo aqui, 4 espaços antes e 4 depois para centralizar o texto no display
+  delay(4000);  // Aguarda 4 segundos (4000 milisegundos) antes rodar o linha abaixo abaixo para limpar a tela
   lcd.clear();    
 }
 
@@ -83,18 +76,16 @@ void loop()
         case '?':  // Comando para mostrar a emissividade de cada sensor
           Serial.println("DFTE - Sensor Temperatura MLX90614"); 
           Serial.print("Emissivity Sensor 1: ");
-          Serial.println(mlx.readEmissivity());
+          Serial.rintln(mlx.readEmissivity());
           Serial.print("Emissivity Sensor 2: ");
-          Serial.println(mlx.readEmissivity2());           
-          break;
-
-        case 'T':  // Comando para mostrar a temperatura do sensor
-          if (Serial.read() == '2')  // Se o comando for 'T2', mostra a temperatura do sensor 2
-            Serial.println(mlx.readObject2TempC());
-          else  // Senão, mostra a temperatura do sensor 1
-            Serial.println(mlx.readObjectTempC());         
-          break;
-
+          Serial.pr  if (emissivity <= 1.0 && emissivity >= 0.0) {  // Verifica se o valor de emissividade é válido
+    mlx.writeEmissivity(emissivity);
+    Serial.println(mlx.readEmissivity());
+    digitalWrite(A5, HIGH);
+    digitalWrite(A4, LOW);
+    delay(50);
+  } else {
+    // Exibe 
         case 'C':  // Comando para alternar o envio contínuo de valores de temperatura
           continuo = !continuo;          
           break;
