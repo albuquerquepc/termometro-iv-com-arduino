@@ -1,39 +1,29 @@
-import os #funcionalidade de sistema operacional
-import sys #funcionalidade de sistema
-import tkinter as tk #interface gráfica
-from tkinter import ttk #widgets
-import serial #comunicação serial
-import serial.tools.list_ports #listagem de portas seriais
-import time #funções de tempo   
-import threading #multi-threading
-import matplotlib.pyplot as plt #plotagem de gráficos
-import matplotlib.animation as animation #animação de gráficos
+import os
+import sys
+import tkinter as tk
+from tkinter import ttk
+import serial
+import serial.tools.list_ports
+import time
+import threading
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from PIL import Image, ImageTk
-
-"""
-Este script é o código fonté um monitor de temperatura que se comunica com um Arduino serialmente para obter leituras de temperatura de dois sensores infravermelhos.
-Os dados são exibidos em um gráfico em tempo real e salvos em um arquivo de texto.
-Notavelmente, o script é executado em uma interface gráfica Tkinter e usa a biblioteca Matplotlib para plotar o gráfico.
-Este script foi desenvolvido principalmente por Abner Carlos Melo, com algumas adaptações e documentação feitas por Paulo Albquerque e Pedro Cruz, na Universidade Federal do Rio Grande do Norte
-"""
 
 class TemperatureMonitorApp:
     def __init__(self, root):   
         self.root = root
         self.root.title("Monitor de Temperatura")
 
-        # Adicionando imagens ao cabeçalho
-        self.add_header_images()
-
         # Variáveis de controle
         self.interval = tk.DoubleVar(value=0.5)
         self.serial_port = None
         self.arduino_connected = False
         self.is_measuring = False
-        self.temperatures = []
-        self.start_time = None  # Inicia o tempo
-        self.file_path = None  # Caminho para salvar o arquivo
+        self.temperatures = []  # Stores object and ambient temperatures as tuples (time, object_temp, ambient_temp)
+        self.start_time = None  # Start time for measurements
+        self.file_path = None  # File path to save the data
 
         # Criando layout
         self.create_widgets()
@@ -50,36 +40,6 @@ class TemperatureMonitorApp:
         self.root.quit()  # Fechar janela Tkinter
         self.root.destroy()  # Garantir que todos os recursos sejam liberados
         print("Programa encerrado.")
-
-    def resource_path(self, relative_path):
-        """ Retorna o caminho absoluto, considerando se está executando como script ou como executável """
-        try:
-            # Quando empacotado com PyInstaller, __MEIPASS é o diretório temporário onde os arquivos estão
-            base_path = sys._MEIPASS
-        except AttributeError:
-            base_path = os.path.abspath(".")
-
-        return os.path.join(base_path, relative_path)
-
-    def add_header_images(self):
-        # Carregar e exibir as imagens usando o caminho correto
-        #logo1_path = self.resource_path("logo_simbolo.png")
-        #logo2_path = self.resource_path("logo_nome.png")
-
-        #logo1 = Image.open(logo1_path)
-        #logo2 = Image.open(logo2_path)
-
-        #logo1 = logo1.resize((232, 100))  # Ajuste o tamanho conforme necessário
-        #logo2 = logo2.resize((670, 100))
-
-        #self.logo1_photo = ImageTk.PhotoImage(logo1)
-        #self.logo2_photo = ImageTk.PhotoImage(logo2)
-
-        header_frame = tk.Frame(self.root)
-        header_frame.grid(row=0, column=0, columnspan=2)
-
-        #tk.Label(header_frame, image=self.logo1_photo).pack(side="left")
-        #tk.Label(header_frame, image=self.logo2_photo).pack(side="left")
 
     def create_widgets(self):
         # Coluna esquerda (Configurações e Botões)
@@ -116,8 +76,9 @@ class TemperatureMonitorApp:
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.root)
         self.canvas.get_tk_widget().grid(row=1, column=1)
 
-        self.line2, = self.ax.plot([], [], 'g-', label="Sensor 2")
-        self.ax.set_ylim(30, 75)  # Limites iniciais
+        self.line_obj, = self.ax.plot([], [], 'r-', label="Temperatura Objeto")
+        self.line_amb, = self.ax.plot([], [], 'b-', label="Temperatura Ambiente")
+        self.ax.set_ylim(20, 50)  # Limites iniciais
         self.ax.set_xlim(0, 10)
         self.ax.set_xlabel("Tempo (s)")
         self.ax.set_ylabel("Temperatura (°C)")
@@ -127,7 +88,6 @@ class TemperatureMonitorApp:
 
     def refresh_serial_ports(self):
         """Atualizando as opções de Porta serial"""
-        
         self.port_combobox['values'] = self.get_serial_ports()
         self.port_combobox.set("")  # Limpa a seleção atual, se necessário
 
@@ -170,7 +130,7 @@ class TemperatureMonitorApp:
             self.start_button.config(text="INICIAR")
         else:
             # Pedir o caminho para salvar os dados antes de iniciar a medição
-            self.file_path = tk.tk.filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text files", "*.txt")])
+            self.file_path = tk.filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text files", "*.txt")])
             if not self.file_path:
                 tk.messagebox.showwarning("Aviso", "Você precisa selecionar um local para salvar os dados.")
                 return
@@ -185,35 +145,37 @@ class TemperatureMonitorApp:
     def measure_temperatures_loop(self):
         """Loop contínuo de leitura de temperaturas em uma thread separada."""
         while self.is_measuring:
-            sensor_value = self.measure_temperature_sensor2()
+            sensor_values = self.measure_temperature_from_serial()
 
-            if sensor_value is not None:
+            if sensor_values is not None:
+                obj_temp, amb_temp = sensor_values
                 # Define o tempo inicial na primeira leitura
                 if self.start_time is None:
                     self.start_time = time.time()
                 current_time = time.time() - self.start_time  # Calcula o tempo transcorrido
-                print(f"[{current_time:.2f}, {sensor_value:.2f}]")
+                print(f"[{current_time:.2f}, Obj: {obj_temp:.2f}°C, Amb: {amb_temp:.2f}°C]")
 
                 # Salva os dados continuamente no arquivo
-                self.save_data_to_file(current_time, sensor_value)
+                self.save_data_to_file(current_time, obj_temp, amb_temp)
 
                 # Armazena os dados localmente para o gráfico
-                self.temperatures.append([current_time, sensor_value])
+                self.temperatures.append([current_time, obj_temp, amb_temp])
 
             time.sleep(self.interval.get())
 
-    def measure_temperature_sensor2(self):
+    def measure_temperature_from_serial(self):
         try:
-            # Envia comando para o sensor 2
-            self.serial_port.write(b'T2\n')
-            # Aguarda o retorno do sensor 2
+            # Lê a resposta do Arduino, que envia ambas as temperaturas no formato: "Temp Objeto C Temp Ambiente"
             response = self.serial_port.readline().decode('utf-8').strip()
             try:
-                return float(response)
-            except ValueError:
+                values = response.split()  # Split the two temperature values
+                obj_temp = float(values[0])  # First value is object temperature
+                amb_temp = float(values[1])  # Second value is ambient temperature
+                return obj_temp, amb_temp
+            except (ValueError, IndexError):
                 return None
         except Exception as e:
-            print(f"Erro na leitura do sensor 2: {e}")
+            print(f"Erro na leitura dos sensores: {e}")
             return None
 
     def update_graph(self, frame):
@@ -223,18 +185,21 @@ class TemperatureMonitorApp:
 
         if self.temperatures:
             times = [t[0] for t in self.temperatures]
-            temps2 = [t[1] for t in self.temperatures]
+            obj_temps = [t[1] for t in self.temperatures]
+            amb_temps = [t[2] for t in self.temperatures]
 
-            if times and temps2:
-                self.line2.set_data(times, temps2)
+            if times and obj_temps and amb_temps:
+                self.line_obj.set_data(times, obj_temps)
+                self.line_amb.set_data(times, amb_temps)
+
                 if max(times):
                     self.ax.set_xlim(0, max(times))  # Atualiza o limite do eixo x
                 else:
                     self.ax.set_xlim(0, 1)  # Atualiza o limite do eixo x
 
                 # Ajuste automático do eixo Y
-                min_temp = min(temps2)
-                max_temp = max(temps2)
+                min_temp = min(min(obj_temps), min(amb_temps))
+                max_temp = max(max(obj_temps), max(amb_temps))
 
                 self.ax.set_ylim(min_temp - 5, max_temp + 5)  # Adiciona uma margem de 5°C
 
@@ -242,25 +207,18 @@ class TemperatureMonitorApp:
             else:
                 print("Nenhum dado válido para atualizar o gráfico.")
 
-    def save_data_manually(self):
-        """Salva os dados do gráfico manualmente em um arquivo .txt."""
-        file_path = tk.filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Text files", "*.txt")])
-        if file_path:
-            with open(file_path, 'w') as f:
-                for t in self.temperatures:
-                    f.write(f"{t[0]}\t{t[1]}\n")
-
-    def save_data_to_file(self, time, temp):
+    def save_data_to_file(self, time, obj_temp, amb_temp):
         """Salva os dados continuamente no arquivo selecionado."""
         with open(self.file_path, 'a') as f:
-            f.write(f"{time:.2f}\t{temp:.2f}\n")
+            f.write(f"{time:.2f}\t{obj_temp:.2f}\t{amb_temp:.2f}\n")
 
     def clear_graph(self):
         """Limpa os dados do gráfico e reinicia o tempo."""
         self.temperatures.clear()
-        self.line2.set_data([], [])
+        self.line_obj.set_data([], [])
+        self.line_amb.set_data([], [])
         self.ax.set_xlim(0, 10)
-        self.ax.set_ylim(30, 75)  # Limites iniciais
+        self.ax.set_ylim(20, 50)  # Limites iniciais
         self.canvas.draw()
         self.start_time = None  # Reseta o tempo inicial
 
