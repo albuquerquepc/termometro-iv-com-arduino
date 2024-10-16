@@ -1,42 +1,34 @@
 import serial
-import serial.tools.list_ports
 import time
 
-def list_serial_ports():
-    """List all available serial ports."""
-    ports = serial.tools.list_ports.comports()
-    return [port.device for port in ports]
+# Configure the serial port. Replace 'COM3' with your port name
+SERIAL_PORT = '/dev/ttyACM0'  # Change this to your Arduino's port
+BAUD_RATE = 9600  # Same baud rate as in Arduino code
 
-def read_from_serial(port, baud_rate=9600):
-    """Continuously read from the specified serial port and print the output."""
+def main():
     try:
-        with serial.Serial(port, baud_rate, timeout=1) as ser:
-            print(f"Connected to {port} at {baud_rate} baud.")
+        # Initialize the serial connection
+        with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1) as ser:
+            time.sleep(2)  # Give time for the connection to establish
+            
+            print("Reading data from Arduino...")
             while True:
-                # Read the line from the serial port
-                line = ser.readline().decode('utf-8').strip()
-                
-                # Print the line to the terminal
-                if line:
-                    print(f"Received: {line}")
-                time.sleep(0.1)  # Sleep briefly to avoid flooding the terminal
+                # Read a line from the serial output
+                line = ser.readline()  # Read raw bytes
+                if line:  # Check if the line is not empty
+                    try:
+                        decoded_line = line.decode('utf-8').strip()  # Try to decode
+                        print(f"Received: {decoded_line}")  # Print the data to the terminal
+                    except UnicodeDecodeError:
+                        # If decoding fails, print the byte values
+                        print(f"Received raw bytes: {line.hex()}")  # Print in hex format
+
     except serial.SerialException as e:
-        print(f"Error connecting to {port}: {e}")
+        print(f"Error opening serial port: {e}")
     except KeyboardInterrupt:
-        print("\nProgram interrupted by user. Exiting...")
+        print("Program terminated by user.")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    print("Available serial ports:")
-    ports = list_serial_ports()
-    if not ports:
-        print("No serial ports found!")
-    else:
-        for i, port in enumerate(ports):
-            print(f"{i}: {port}")
-        
-        # Ask the user to choose a port
-        port_index = int(input(f"Select a port by index (0 to {len(ports)-1}): "))
-        selected_port = ports[port_index]
-        
-        # Start reading from the selected port
-        read_from_serial(selected_port)
+    main()
