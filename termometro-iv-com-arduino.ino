@@ -55,7 +55,7 @@ void setup() {
   lcd.print("      DFTE      ");
   lcd.setCursor(0, 1);
   lcd.print("    MLX90614    ");
-  delay(2000);  // Aguarda 4 segundos antes de limpar a tela
+  delay(2000);  // Aguarda 2 segundos antes de limpar a tela
   lcd.clear();
 }
 
@@ -86,9 +86,8 @@ void loop() {
   lcd.print("C");
 
   // Envia as temperaturas para o monitor serial
-  Serial.print("Temp-Objeto: ");
   Serial.print(tempObjeto);
-  Serial.print(" Temp-Ambiente: ");
+  Serial.print(" ");
   Serial.println(tempAmbiente);
 
   delay(100);  // Atualiza o display e a comunicação serial a cada 1000 ms
