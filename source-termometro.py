@@ -122,7 +122,7 @@ class TemperatureMonitorApp:
             self.is_measuring = True
             self.start_button.config(text="STOP")
             threading.Thread(target=self.listen_to_serial, daemon=True).start()
-            self.start_timer()  # Start the timer for 100ms updates
+            self.start_timer()  # Start the timer for 1000ms updates
 
     def listen_to_serial(self):
         while self.is_measuring:
@@ -136,7 +136,7 @@ class TemperatureMonitorApp:
 
     def start_timer(self):
         self.update_graph_and_save()  # First immediate update
-        self.root.after(100, self.start_timer)  # Schedule the next update for 100ms later
+        self.root.after(1000, self.start_timer)  # Schedule the next update for 1000ms later
 
     def update_graph_and_save(self):
         if self.latest_temp is not None:  # Only update if valid temperature exists

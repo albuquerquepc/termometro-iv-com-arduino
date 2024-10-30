@@ -29,7 +29,7 @@ byte grau[8] = {B00110, B01001, B01001, B00110,
 
 void setup() {
   // Inicia comunicação serial a 115200 baud
-  Serial.begin(115200);
+  Serial.begin(9600);
 
   // Inicializa o display LCD com 16 colunas e 2 linhas
   lcd.begin(16, 2);
@@ -78,5 +78,5 @@ void loop() {
   // Envia as temperaturas para o monitor serial
   Serial.println(tempObjeto);
 
-  delay(100);  // Atualiza o display e a comunicação serial a cada 1000 ms
+  delay(1000);  // Atualiza o display e a comunicação serial a cada 1000 ms
 }
