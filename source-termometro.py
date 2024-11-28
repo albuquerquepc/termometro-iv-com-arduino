@@ -1,198 +1,194 @@
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from PySide6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
+                               QLabel, QPushButton, QLineEdit, QComboBox, QFileDialog, QMessageBox)  # type: ignore
+from PySide6.QtCharts import QChart, QChartView, QLineSeries  # type: ignore
+from PySide6.QtCore import QTimer, QPointF  # type: ignore
+from PySide6.QtGui import QDoubleValidator  # type: ignore
 import serial
 import serial.tools.list_ports
 import threading
-import time
-from time import perf_counter
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.animation import FuncAnimation
 import csv
+from time import perf_counter
 
-class TempMonitorApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Monitor de Temperatura com Arduino")
-        
-        # Variáveis de estado
-        self.arduino = None
-        self.port = tk.StringVar()
-        self.update_rate = tk.DoubleVar(value=1.0)
-        self.connected = False
-        self.collecting_data = False
-        self.start_time = None
-        self.data = []
-        self.filepath = tk.StringVar(value="Nenhum local escolhido")
-        self.latest_temp = tk.StringVar(value="---")
 
-        # Elementos de interface
-        self.setup_ui()
+class MonitorTemperaturaApp(QMainWindow):
+    def __init__(self):
+        super().__init__()
 
-    def setup_ui(self):
-        # Frame para a seção de parâmetros
-        param_frame = ttk.Frame(self.root)
-        param_frame.pack(side=tk.LEFT, padx=10, pady=10, fill=tk.Y)
-        
-        ttk.Label(param_frame, text="Parâmetros").pack(anchor="w")
+        # Configurações iniciais da janela principal
+        self.setWindowTitle("Monitor de Temperatura com Qt")
+        self.resize(1024, 768)
 
-        # Seletor de porta serial
-        ttk.Label(param_frame, text="Porta Serial:").pack(anchor="w", pady=5)
-        self.port_combobox = ttk.Combobox(param_frame, textvariable=self.port, state="readonly", width=15)
-        self.port_combobox.pack(anchor="w", pady=5)
-        self.update_ports()
-        
-        self.update_button = ttk.Button(param_frame, text="Atualizar", command=self.update_ports)
-        self.update_button.pack(anchor="w", pady=5)
+        # Estado da aplicação
+        self.conexao_arduino = None
+        self.porta_serial_selecionada = ""
+        self.taxa_atualizacao = 1.0
+        self.conectado = False
+        self.coletando_dados = False
+        self.tempo_inicio = None
+        self.dados = []
+        self.serie_dados = QLineSeries()
 
-        self.connect_button = ttk.Button(param_frame, text="Conectar", command=self.toggle_connection)
-        self.connect_button.pack(anchor="w", pady=5)
+        # Configuração da interface
+        self.configurar_interface()
 
-        # Taxa de atualização
-        ttk.Label(param_frame, text="Taxa de atualização (s):").pack(anchor="w", pady=5)
-        ttk.Entry(param_frame, textvariable=self.update_rate, width=10).pack(anchor="w", pady=5)
+        # Timer para atualizar o gráfico
+        self.timer_atualizacao = QTimer()
+        self.timer_atualizacao.timeout.connect(self.atualizar_grafico)
 
-        # Exibição da última temperatura
-        ttk.Label(param_frame, text="Última Temperatura (°C):").pack(anchor="w", pady=5)
-        self.temp_label = ttk.Label(param_frame, textvariable=self.latest_temp)
-        self.temp_label.pack(anchor="w", pady=5)
+    def configurar_interface(self):
+        # Cria a interface gráfica com Qt.#
+        # Widget principal
+        widget_principal = QWidget()
+        self.setCentralWidget(widget_principal)
 
-        # Escolher local para salvar e exibição do caminho
-        self.file_button = ttk.Button(param_frame, text="Escolher Local para Salvar", command=self.choose_file_location)
-        self.file_button.pack(anchor="w", pady=5)
+        # Layout principal
+        layout_principal = QHBoxLayout(widget_principal)
 
-        ttk.Label(param_frame, text="Local do Arquivo:").pack(anchor="w", pady=5)
-        self.filepath_label = ttk.Label(param_frame, textvariable=self.filepath, wraplength=150)
-        self.filepath_label.pack(anchor="w", pady=5)
+        # Seção de controles (lado esquerdo)
+        layout_controles = QVBoxLayout()
+        layout_principal.addLayout(layout_controles)
 
-        # Botão para iniciar e parar a coleta de dados
-        self.start_button = ttk.Button(param_frame, text="Começar", command=self.start_acquisition, state="disabled")
-        self.start_button.pack(anchor="w", pady=10)
+        # Rótulo e combobox para seleção de porta serial
+        layout_controles.addWidget(QLabel("Porta Serial:"))
+        self.caixa_portas = QComboBox()
+        self.atualizar_portas()
+        layout_controles.addWidget(self.caixa_portas)
 
-        # Configuração do gráfico
-        self.fig, self.ax = plt.subplots()
-        self.line, = self.ax.plot([], [], lw=2)
-        self.ax.set_xlabel("Tempo (s)")
-        self.ax.set_ylabel("Temperatura (°C)")
-        self.ax.set_title("Temperatura em tempo real")
+        # Botão para atualizar portas disponíveis
+        self.botao_atualizar_portas = QPushButton("Atualizar Portas")
+        self.botao_atualizar_portas.clicked.connect(self.atualizar_portas)
+        layout_controles.addWidget(self.botao_atualizar_portas)
 
-        # Canvas para exibir o gráfico na interface Tkinter
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
-        self.canvas.get_tk_widget().pack(side=tk.LEFT, padx=10, pady=10, fill=tk.BOTH, expand=True)
+        # Botão de conexão/desconexão
+        self.botao_conectar = QPushButton("Conectar")
+        self.botao_conectar.clicked.connect(self.alternar_conexao)
+        layout_controles.addWidget(self.botao_conectar)
 
-        # Animação do gráfico
-        self.ani = FuncAnimation(self.fig, self.update_plot, interval=100)
+        # Campo para taxa de atualização
+        layout_controles.addWidget(QLabel("Taxa de Atualização (s):"))
+        self.campo_taxa_atualizacao = QLineEdit("1.0")
+        self.campo_taxa_atualizacao.setValidator(
+            QDoubleValidator(0.1, 10.0, 1))  # Aceita apenas floats entre 0.1 e 10.0
+        self.campo_taxa_atualizacao.textChanged.connect(self.atualizar_portas)
+        layout_controles.addWidget(self.campo_taxa_atualizacao)
 
-    def update_ports(self):
-        ports = serial.tools.list_ports.comports()
-        self.port_combobox['values'] = [port.device for port in ports]
-    
-    def toggle_connection(self):
-        if self.connected:
-            self.disconnect()
+        # Rótulo para exibir a última temperatura
+        layout_controles.addWidget(QLabel("Última Temperatura (°C):"))
+        self.rotulo_temperatura = QLabel("---")
+        layout_controles.addWidget(self.rotulo_temperatura)
+
+        # Botão para escolher o local de salvamento do arquivo
+        self.botao_escolher_local = QPushButton("Escolher Local para Salvar")
+        self.botao_escolher_local.clicked.connect(self.escolher_local_arquivo)
+        layout_controles.addWidget(self.botao_escolher_local)
+
+        # Botão para iniciar/parar coleta de dados
+        self.botao_iniciar_coleta = QPushButton("Iniciar Coleta")
+        self.botao_iniciar_coleta.setEnabled(False)
+        self.botao_iniciar_coleta.clicked.connect(self.alternar_coleta)
+        layout_controles.addWidget(self.botao_iniciar_coleta)
+
+        # Seção do gráfico (lado direito)
+        self.chart = QChart()
+        self.chart.addSeries(self.serie_dados)
+        self.chart.setTitle("Temperatura")
+        self.chart.createDefaultAxes()
+
+        self.chart_view = QChartView(self.chart)
+        layout_principal.addWidget(self.chart_view)
+
+    def atualizar_portas(self):
+        # Atualiza a lista de portas seriais disponíveis.#
+        portas = serial.tools.list_ports.comports()
+        self.caixa_portas.clear()
+        self.caixa_portas.addItems([porta.device for porta in portas])
+
+    def alternar_conexao(self):
+        # Conecta ou desconecta do Arduino.#
+        if self.conectado:
+            self.desconectar()
         else:
-            self.connect()
-    
-    def connect(self):
-        port = self.port.get()
-        if port:
-            try:
-                self.arduino = serial.Serial(port, 9600, timeout=1)
-                time.sleep(2)  # Pequeno atraso para estabilizar a conexão
-                self.connected = True
-                self.connect_button.config(text="Desconectar")
-                self.file_button.config(state="normal")
-                self.start_button.config(state="normal")
-                messagebox.showinfo("Conexão", "Conectado ao Arduino com sucesso!")
-                
-                # Iniciar thread para atualizar a última temperatura
-                self.temp_thread = threading.Thread(target=self.update_latest_temp)
-                self.temp_thread.start()
+            self.conectar()
 
+    def conectar(self):
+        # Tenta estabelecer conexão com a porta serial selecionada.#
+        porta = self.caixa_portas.currentText()
+        if porta:
+            try:
+                self.conexao_arduino = serial.Serial(porta, 9600, timeout=1)
+                self.conectado = True
+                self.botao_conectar.setText("Desconectar")
+                self.botao_iniciar_coleta.setEnabled(True)
+                QMessageBox.information(
+                    self, "Conexão", "Conectado com sucesso!")
             except serial.SerialException as e:
-                messagebox.showerror("Erro de Conexão", f"Não foi possível conectar: {e}")
+                QMessageBox.critical(self, "Erro de Conexão", str(e))
         else:
-            messagebox.showwarning("Aviso", "Selecione uma porta serial.")
-    
-    def disconnect(self):
-        if self.arduino and self.arduino.is_open:
-            self.arduino.close()
-        self.connected = False
-        self.connect_button.config(text="Conectar")
-        self.file_button.config(state="disabled")
-        self.start_button.config(state="disabled")
-        self.collecting_data = False
+            QMessageBox.warning(self, "Aviso", "Selecione uma porta serial!")
 
-    def choose_file_location(self):
-        self.filepath.set(filedialog.asksaveasfilename(defaultextension=".txt",
-                                                       filetypes=[("Text files", "*.txt")]))
-        if self.filepath.get():
-            self.start_button.config(state="normal")
+    def desconectar(self):
+        # Desconecta do Arduino.#
+        if self.conexao_arduino and self.conexao_arduino.is_open:
+            self.conexao_arduino.close()
+        self.conectado = False
+        self.botao_conectar.setText("Conectar")
+        self.botao_iniciar_coleta.setEnabled(False)
+
+    def escolher_local_arquivo(self):
+        # Abre um diálogo para escolher onde salvar os dados.#
+        caminho = QFileDialog.getSaveFileName(
+            self, "Salvar Dados", "", "TXT Files (*.txt)")
+        self.caminho_arquivo = caminho[0]
+
+    def alternar_coleta(self):
+        # Inicia ou para a coleta de dados.#
+        if not self.coletando_dados:
+            self.coletando_dados = True
+            self.botao_iniciar_coleta.setText("Parar Coleta")
+            self.dados.clear()
+            self.tempo_inicio = perf_counter()
+            self.timer_atualizacao.start(float(self.taxa_atualizacao))
+            threading.Thread(target=self.coletar_dados, daemon=True).start()
         else:
-            self.filepath.set("Nenhum local escolhido")
+            self.coletando_dados = False
+            self.botao_iniciar_coleta.setText("Iniciar Coleta")
+            self.timer_atualizacao.stop()
+            self.salvar_dados()
 
-    def start_acquisition(self):
-        if not self.collecting_data:
-            if not self.filepath.get():
-                messagebox.showwarning("Aviso", "Escolha o local para salvar os dados antes de iniciar.")
-                return
-            
-            self.collecting_data = True
-            self.start_button.config(text="Parar")
-            self.start_time = perf_counter()
-            self.data = []
-            
-            # Inicia thread para aquisição de dados
-            self.thread = threading.Thread(target=self.acquire_data)
-            self.thread.start()
-        else:
-            self.collecting_data = False
-            self.start_button.config(text="Começar")
-            self.save_data_to_file()
-            # Esvazia o caminho do arquivo para uma nova medida
-            self.filepath.set("Nenhum local escolhido")
-
-    def acquire_data(self):
-        while self.collecting_data and self.arduino and self.arduino.is_open:
+    def coletar_dados(self):
+        # Coleta dados da porta serial.#
+        while self.coletando_dados:
             try:
-                line = self.arduino.readline().decode().strip()
-                if line:
-                    temp = float(line)
-                    elapsed_time = perf_counter() - self.start_time
-                    self.data.append((elapsed_time, temp))
-                    print(f"{elapsed_time:.1f}s: {temp:.2f}°C")
-                time.sleep(self.update_rate.get())
-            except (ValueError, serial.SerialException):
-                continue
+                linha = self.conexao_arduino.readline().decode('utf-8').strip()
+                if linha:
+                    tempo = perf_counter() - self.tempo_inicio
+                    self.dados.append((tempo, float(linha)))
+                    self.rotulo_temperatura.setText(f"{linha} °C")
+            except Exception as e:
+                QMessageBox.critical(self, "Erro de Coleta", str(e))
+                break
 
-    def update_latest_temp(self):
-        while self.connected and self.arduino and self.arduino.is_open:
+    def atualizar_grafico(self):
+        # Atualiza o gráfico em tempo real.#
+        self.serie_dados.clear()
+        for tempo, temperatura in self.dados:
+            self.serie_dados.append(QPointF(tempo, temperatura))
+
+    def salvar_dados(self):
+        # salva os dados coletados em um arquivo CSV
+        if hasattr(self, "caminho_arquivo") and self.caminho_arquivo:
             try:
-                line = self.arduino.readline().decode().strip()
-                if line:
-                    temp = float(line)
-                    self.latest_temp.set(f"{temp:.2f} °C")
-            except (ValueError, serial.SerialException):
-                continue
+                with open(self.caminho_arquivo, 'w', newline='') as arquivo:
+                    escritor = csv.writer(arquivo)
+                    escritor.writerows(self.dados)
+                QMessageBox.information(
+                    self, "Sucesso", "Dados salvos com sucesso!")
+            except Exception as e:
+                QMessageBox.critical(self, "Erro ao Salvar", str(e))
 
-    def update_plot(self, frame):
-        if self.data:
-            times, temps = zip(*self.data)
-            self.line.set_data(times, temps)
-            self.ax.relim()
-            self.ax.autoscale_view()
-        self.canvas.draw()
-
-    def save_data_to_file(self):
-        if self.data and self.filepath.get():
-            with open(self.filepath.get(), "w") as f:
-                writer = csv.writer(f, delimiter='\t')
-                writer.writerow(["Tempo (s)", "Temperatura (°C)"])
-                for time, temp in self.data:
-                    writer.writerow([f"{time:.1f}", f"{temp:.2f}"])
-            messagebox.showinfo("Dados Salvos", f"Dados salvos em '{self.filepath.get()}'.")
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = TempMonitorApp(root)
-    root.mainloop()
+    app = QApplication([])
+    janela = MonitorTemperaturaApp()
+    janela.show()
+    app.exec()

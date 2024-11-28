@@ -13,7 +13,7 @@ byte grau[8] = {B00110, B01001, B01001, B00110,
 
 // Variável para armazenar o tempo do último update
 unsigned long ultimoTempo = 0;
-const unsigned long intervalo = 100000; // 100 ms em microssegundos
+const unsigned long intervalo = 500000; // 500 ms em microssegundos
 
 //---------------------------------------------------------------
 
@@ -47,7 +47,7 @@ void setup() {
 //---------------------------------------------------------------
 
 void loop() {
-  // Verifica se já passou o intervalo de 100 ms
+  // Verifica se já passou o intervalo de 500 ms
   if (micros() - ultimoTempo >= intervalo) {
     ultimoTempo = micros();  // Atualiza o tempo do último update
     
