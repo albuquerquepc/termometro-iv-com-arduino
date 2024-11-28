@@ -1,8 +1,7 @@
-from PySide6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget,
-                               QLabel, QPushButton, QLineEdit, QComboBox, QFileDialog, QMessageBox)  # type: ignore
-from PySide6.QtCharts import QChart, QChartView, QLineSeries  # type: ignore
-from PySide6.QtCore import QTimer, QPointF  # type: ignore
-from PySide6.QtGui import QDoubleValidator  # type: ignore
+from PySide6.QtWidgets import ( QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QPushButton, QLineEdit, QComboBox, QFileDialog, QMessageBox) # type: ignore
+from PySide6.QtCharts import QChart, QChartView, QLineSeries # type: ignore
+from PySide6.QtCore import QTimer, QPointF # type: ignore
+from PySide6.QtGui import QIntValidator # type: ignore
 import serial
 import serial.tools.list_ports
 import threading
@@ -36,7 +35,7 @@ class MonitorTemperaturaApp(QMainWindow):
         self.timer_atualizacao.timeout.connect(self.atualizar_grafico)
 
     def configurar_interface(self):
-        # Cria a interface gráfica com Qt.#
+        """Cria a interface gráfica com Qt."""
         # Widget principal
         widget_principal = QWidget()
         self.setCentralWidget(widget_principal)
@@ -68,7 +67,7 @@ class MonitorTemperaturaApp(QMainWindow):
         layout_controles.addWidget(QLabel("Taxa de Atualização (s):"))
         self.campo_taxa_atualizacao = QLineEdit("1.0")
         self.campo_taxa_atualizacao.setValidator(
-            QDoubleValidator(0.1, 10.0, 1))  # Aceita apenas floats entre 0.1 e 10.0
+            QIntValidator(1, 10))  # Aceita apenas inteiros
         self.campo_taxa_atualizacao.textChanged.connect(self.atualizar_portas)
         layout_controles.addWidget(self.campo_taxa_atualizacao)
 
@@ -98,20 +97,20 @@ class MonitorTemperaturaApp(QMainWindow):
         layout_principal.addWidget(self.chart_view)
 
     def atualizar_portas(self):
-        # Atualiza a lista de portas seriais disponíveis.#
+        """Atualiza a lista de portas seriais disponíveis."""
         portas = serial.tools.list_ports.comports()
         self.caixa_portas.clear()
         self.caixa_portas.addItems([porta.device for porta in portas])
 
     def alternar_conexao(self):
-        # Conecta ou desconecta do Arduino.#
+        """Conecta ou desconecta do Arduino."""
         if self.conectado:
             self.desconectar()
         else:
             self.conectar()
 
     def conectar(self):
-        # Tenta estabelecer conexão com a porta serial selecionada.#
+        """Tenta estabelecer conexão com a porta serial selecionada."""
         porta = self.caixa_portas.currentText()
         if porta:
             try:
@@ -127,7 +126,7 @@ class MonitorTemperaturaApp(QMainWindow):
             QMessageBox.warning(self, "Aviso", "Selecione uma porta serial!")
 
     def desconectar(self):
-        # Desconecta do Arduino.#
+        """Desconecta do Arduino."""
         if self.conexao_arduino and self.conexao_arduino.is_open:
             self.conexao_arduino.close()
         self.conectado = False
@@ -135,18 +134,19 @@ class MonitorTemperaturaApp(QMainWindow):
         self.botao_iniciar_coleta.setEnabled(False)
 
     def escolher_local_arquivo(self):
-        # Abre um diálogo para escolher onde salvar os dados.#
+        """Abre um diálogo para escolher onde salvar os dados."""
         caminho = QFileDialog.getSaveFileName(
             self, "Salvar Dados", "", "TXT Files (*.txt)")
         self.caminho_arquivo = caminho[0]
 
     def alternar_coleta(self):
-        # Inicia ou para a coleta de dados.#
+        """Inicia ou para a coleta de dados."""
         if not self.coletando_dados:
             self.coletando_dados = True
             self.botao_iniciar_coleta.setText("Parar Coleta")
             self.dados.clear()
             self.tempo_inicio = perf_counter()
+            self.tempo_corrido = perf_counter()
             self.timer_atualizacao.start(float(self.taxa_atualizacao))
             threading.Thread(target=self.coletar_dados, daemon=True).start()
         else:
@@ -156,26 +156,34 @@ class MonitorTemperaturaApp(QMainWindow):
             self.salvar_dados()
 
     def coletar_dados(self):
-        # Coleta dados da porta serial.#
-        while self.coletando_dados:
+        """Coleta dados da porta serial."""
+        while self.coletando_dados == True:
             try:
-                linha = self.conexao_arduino.readline().decode('utf-8').strip()
-                if linha:
-                    tempo = perf_counter() - self.tempo_inicio
-                    self.dados.append((tempo, float(linha)))
-                    self.rotulo_temperatura.setText(f"{linha} °C")
+                while True:
+                    #checa se passou-se 1 segundo
+                    if (perf_counter() - self.tempo_inicio) >= float(1.0):
+                        #pegar a linha da porta serial
+                        linha = self.conexao_arduino.readline().decode('utf-8').strip()
+                        #adiciona a tupla (tempo, temperatura) na lista de dados
+                        self.dados.append(((perf_counter() - self.tempo_corrido), float(linha)))
+                        #atualizao widget que mostra a última temperatura lida
+                        self.rotulo_temperatura.setText(f"{linha} °C")
+                        #reseta o tempo para checar novamente no loop
+                        self.tempo_inicio = perf_counter()
+
+
             except Exception as e:
                 QMessageBox.critical(self, "Erro de Coleta", str(e))
                 break
 
     def atualizar_grafico(self):
-        # Atualiza o gráfico em tempo real.#
+        """Atualiza o gráfico em tempo real."""
         self.serie_dados.clear()
         for tempo, temperatura in self.dados:
             self.serie_dados.append(QPointF(tempo, temperatura))
 
     def salvar_dados(self):
-        # salva os dados coletados em um arquivo CSV
+        #salva os dados coletados em um arquivo CSV
         if hasattr(self, "caminho_arquivo") and self.caminho_arquivo:
             try:
                 with open(self.caminho_arquivo, 'w', newline='') as arquivo:
@@ -185,7 +193,6 @@ class MonitorTemperaturaApp(QMainWindow):
                     self, "Sucesso", "Dados salvos com sucesso!")
             except Exception as e:
                 QMessageBox.critical(self, "Erro ao Salvar", str(e))
-
 
 if __name__ == "__main__":
     app = QApplication([])
