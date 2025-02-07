@@ -9,13 +9,12 @@ from PySide6.QtGui import QPainter
 from PySide6.QtCore import Qt
 from serial.tools import list_ports
 
-# ==================================================
-# Thread para comunicação serial
-# ==================================================
+"""
+Classe para comunicação serial com a placa Arduino UNO. Aqui acontece a leitura dos dados crus e o processamento para unidades que façam sentido para leitura. Alterar o código dessa parte tem ALTO risco de quebrar o script inteiro
+"""
 
-
-class TrabalhadorSerial(QThread):
-    dados_recebidos = Signal(float, float)  # Sinal: tempo, temperatura
+class SerialWorker(QThread):
+    dados_recebidos_crus = Signal(float, float)  # Sinal: tempo, temperatura
     erro_conexao = Signal(str)              # Sinal para erros
 
     def __init__(self):
@@ -66,11 +65,12 @@ class TrabalhadorSerial(QThread):
                     tempo_decorrido = round((tempo / 1e6), 2)
 
                     # Emite dados para a interface
-                    self.dados_recebidos.emit(tempo_decorrido, temperatura)
+                    self.dados_recebidos_crus.emit(tempo_decorrido, temperatura)
 
                     # Armazena dados em memória se estiver registrando
                     if self.registrando:
-                        self.dados_registro.append((tempo_decorrido, temperatura))
+                        self.dados_registro.append(
+                            (tempo_decorrido, temperatura))
 
             except Exception as e:
                 print(f"Erro na leitura: {str(e)}")
@@ -92,7 +92,8 @@ class TrabalhadorSerial(QThread):
                     f.write("Tempo(s)\tTemperatura(°C)\n")
                     tempo_primeiro = self.dados_registro[0][0]
                     for tempo_decorrido, temp in self.dados_registro:
-                        f.write(f"{(tempo_decorrido-tempo_primeiro):.2f}\t{temp:.2f}\n")
+                        f.write(
+                            f"{(tempo_decorrido-tempo_primeiro):.2f}\t{temp:.2f}\n")
             except Exception as e:
                 self.erro_conexao.emit(f"Erro ao salvar arquivo: {str(e)}")
 
@@ -100,9 +101,9 @@ class TrabalhadorSerial(QThread):
         """Encerra a execução da thread"""
         self.executando = False
 
-# ==================================================
-# Classe principal da interface gráfica
-# ==================================================
+"""
+Classe principal da interface gráfica. Aqui são construídos a parte de controle e visualização dos dados, desde botões pressionáveis até o gráfico em tempo real.Alterar essa parte tem baixo risco de quebrar o script inteiro, mas pode afetar a usabilidade do sistema, como a visualização em tempo real do gráfico ou a aparência geral do programa. Alguns botões como o de conectar ou de salvar arquivo são essenciais para o funcionamento do sistema, cuidado ao alterar esses botões
+"""
 
 
 class JanelaPrincipal(QMainWindow):
@@ -110,7 +111,7 @@ class JanelaPrincipal(QMainWindow):
         super().__init__()
         self.tempo_primordial = None
         self.configurar_interface()
-        self.trabalhador_serial = TrabalhadorSerial()
+        self.trabalhador_serial = SerialWorker()
         self.configurar_conexoes()
 
     def configurar_interface(self):
@@ -200,8 +201,8 @@ class JanelaPrincipal(QMainWindow):
         self.btn_desconectar.clicked.connect(self.parar_conexao)
         self.btn_selecionar_arquivo.clicked.connect(self.selecionar_arquivo)
         self.btn_registro.clicked.connect(self.gerenciar_registro)
-        self.trabalhador_serial.dados_recebidos.connect(self.atualizar_display)
-        self.trabalhador_serial.dados_recebidos.connect(self.atualizar_grafico)
+        self.trabalhador_serial.dados_recebidos_crus.connect(self.atualizar_display)
+        self.trabalhador_serial.dados_recebidos_crus.connect(self.atualizar_grafico)
         self.trabalhador_serial.erro_conexao.connect(self.mostrar_erro)
 
     def configurar_eixos(self):
@@ -254,7 +255,8 @@ class JanelaPrincipal(QMainWindow):
             self.trabalhador_serial.parar_registro()
             self.btn_registro.setText("Iniciar Registro")
             self.btn_selecionar_arquivo.setEnabled(True)
-            self.label_caminho.setText("Arquivo salvo: " + self.label_caminho.tex())
+            self.label_caminho.setText(
+                "Arquivo salvo: " + self.label_caminho.tex())
 
     def atualizar_display(self, tempo_decorrido, temperatura):
         """Atualiza o display de temperatura"""
@@ -267,10 +269,10 @@ class JanelaPrincipal(QMainWindow):
             self.mostrar_erro("Selecione uma porta COM!")
             return
 
-        self.trabalhador_serial = TrabalhadorSerial()
+        self.trabalhador_serial = SerialWorker()
 
-        self.trabalhador_serial.dados_recebidos.connect(self.atualizar_display)
-        self.trabalhador_serial.dados_recebidos.connect(self.atualizar_grafico)
+        self.trabalhador_serial.dados_recebidos_crus.connect(self.atualizar_display)
+        self.trabalhador_serial.dados_recebidos_crus.connect(self.atualizar_grafico)
         self.trabalhador_serial.erro_conexao.connect(self.mostrar_erro)
 
         self.trabalhador_serial.configurar_porta(porta)
@@ -289,14 +291,13 @@ class JanelaPrincipal(QMainWindow):
         """Atualiza o gráfico com novos dados recebidos"""
         if not self.trabalhador_serial.registrando:
             return
-        
+
         if self.tempo_primordial is None:
             self.tempo_primordial = tempo_decorrido
 
         tempo_relativo_ao_registro = tempo_decorrido - self.tempo_primordial
 
-
-        self.serie.append(tempo_relativo_ao_registro, temperatura) # type: ignore
+        self.serie.append(tempo_relativo_ao_registro, temperatura)  # type: ignore
 
         # Ajusta faixa dos eixos
         ultimo_tempo = self.serie.at(self.serie.count()-1).x()
@@ -325,9 +326,9 @@ class JanelaPrincipal(QMainWindow):
         evento.accept()
 
 
-# ==================================================
-# Ponto de entrada do programa
-# ==================================================
+"""
+Boilerplate para execução da aplicação
+"""
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     janela = JanelaPrincipal()
