@@ -62,7 +62,7 @@ class SerialWorker(QThread):
 
                     # Calcula tempo relativo em segundos
                     # Convertendo µs para segundos
-                    tempo_decorrido = round((tempo / 1e6), 2)
+                    tempo_decorrido = round((tempo / 1000), 2)
 
                     # Emite dados para a interface
                     self.dados_recebidos_crus.emit(tempo_decorrido, temperatura)
@@ -136,8 +136,11 @@ class JanelaPrincipal(QMainWindow):
         self.btn_selecionar_arquivo = QPushButton("Selecionar Arquivo")
         self.label_caminho = QLabel("Arquivo não selecionado")
         self.label_caminho.setWordWrap(True)
-        self.btn_registro = QPushButton("Iniciar Registro")
+        self.btn_registro = QPushButton("Iniciar medida")
         self.btn_registro.setEnabled(False)
+        self.label_descapossalvo = QLabel("⚠ ATENÇÃO: Se após selecionar local de salvamento de arquivo, a placa se desconectar, REINICIE O PROGRAMA! Caso contrário, a medida realizada NÃO SERÁ SALVA! ⚠")
+        self.label_descapossalvo.setWordWrap(True)
+        
 
         self.status_label = QLabel("Status: Desconectado")
 
@@ -159,6 +162,7 @@ class JanelaPrincipal(QMainWindow):
         layout_controles.addWidget(QLabel(" "))
         layout_controles.addWidget(self.btn_selecionar_arquivo)
         layout_controles.addWidget(self.label_caminho)
+        layout_controles.addWidget(self.label_descapossalvo)
         layout_controles.addWidget(self.btn_registro)
         layout_controles.addWidget(self.status_label)
         layout_controles.addStretch()
@@ -230,6 +234,10 @@ class JanelaPrincipal(QMainWindow):
         self.combo_portas.clear()
         portas = [p.device for p in list_ports.comports()]
         self.combo_portas.addItems(portas)
+        # Seleciona a última porta da lista
+        if portas:
+            self.combo_portas.setCurrentIndex(len(portas) - 1)
+
 
     def selecionar_arquivo(self):
         """Abre diálogo para seleção do arquivo de saída"""
@@ -240,8 +248,9 @@ class JanelaPrincipal(QMainWindow):
 
         if caminho:
             self.trabalhador_serial.configurar_arquivo(caminho)
-            self.label_caminho.setText(caminho)
+            self.label_caminho.setText("Medida será salva em: " + caminho)
             self.btn_registro.setEnabled(True)
+            
 
     def gerenciar_registro(self):
         """Controla início/parada do registro"""
@@ -249,11 +258,11 @@ class JanelaPrincipal(QMainWindow):
             self.serie.clear()
             self.tempo_primordial = None
             self.trabalhador_serial.iniciar_registro()
-            self.btn_registro.setText("Parar Registro")
+            self.btn_registro.setText("Finalizar e salvar medida")
             self.btn_selecionar_arquivo.setEnabled(False)
         else:
             self.trabalhador_serial.parar_registro()
-            self.btn_registro.setText("Iniciar Registro")
+            self.btn_registro.setText("Iniciar medida")
             self.btn_selecionar_arquivo.setEnabled(True)
             self.label_caminho.setText(
                 "Arquivo salvo: " + self.label_caminho.tex())
@@ -265,16 +274,22 @@ class JanelaPrincipal(QMainWindow):
     def iniciar_conexao(self):
         """Inicia conexão com a porta selecionada"""
         porta = self.combo_portas.currentText()
+        # Se nenhuma porta estiver selecionada, tenta a última da lista
         if not porta:
-            self.mostrar_erro("Selecione uma porta COM!")
-            return
-
+            portas = [p.device for p in list_ports.comports()]
+            if portas:
+                porta = portas[-1]
+                self.combo_portas.setCurrentText(porta)
+            else:
+                self.mostrar_erro("Nenhuma porta COM disponível!")
+                return
+        
         self.trabalhador_serial = SerialWorker()
-
+        
         self.trabalhador_serial.dados_recebidos_crus.connect(self.atualizar_display)
         self.trabalhador_serial.dados_recebidos_crus.connect(self.atualizar_grafico)
         self.trabalhador_serial.erro_conexao.connect(self.mostrar_erro)
-
+        
         self.trabalhador_serial.configurar_porta(porta)
         self.trabalhador_serial.start()
         self.status_label.setText("Status: Conectado")

@@ -1,0 +1,22 @@
+[Desktop Entry]
+Name=Termômetro
+Type=Application
+Exec=/home/paulo/Scripts/termometro-iv-com-arduino/dist/Termômetro
+Terminal=false
+Icon=/home/paulo/Scripts/termometro-iv-com-arduino/images/xpmtermia.xpm
+Comment=Any comment
+NoDisplay=false
+Categories=Graphics;Acessories;Office
+Name[en]=termometro.desktop
+[Desktop Entry]
+Name=Termômetro
+Type=Application
+Exec=/home/paulo/Scripts/termometro-iv-com-arduino/dist/Termômetro
+Terminal=false
+Icon=/home/paulo/Scripts/termometro-iv-com-arduino/images/xpmtermia.xpm
+Comment[en]=Monitor temperature from Arduino board with MLX90614 IR sensor
+Comment[pt_BR]=Monitore temperatura de placa Arduino com sensor IV MLX90614
+NoDisplay=false
+Categories=Graphics;Acessories;Office
+Name[en]=Thermometer
+Name[pt_BR]=Termômetro

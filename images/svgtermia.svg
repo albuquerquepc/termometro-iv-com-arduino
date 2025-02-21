@@ -1,0 +1,16 @@
+<svg width="256" height="256" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Thermometer Body -->
+  <rect x="20" y="15" width="10" height="50" fill="lightblue" stroke="none"/>
+  <circle cx="25" cy="70" r="15" fill="lightblue" stroke="none"/>
+  
+  <!-- Thermometer Liquid -->
+  <rect x="23" y="30" width="4" height="35" fill="rgb(220, 40, 70)"/>
+  <circle cx="25" cy="70" r="8" fill="rgb(220, 40, 70)"/>
+  
+  <!-- X-axis -->
+  <line x1="25" y1="85" x2="90" y2="85" stroke="lightblue" stroke-width="3"/>
+  
+  <!-- Graph Line -->
+  <polyline points="25,85 35,75 45,80 55,65 65,70 75,50 85,60 95,40" 
+            fill="none" stroke="rgb(220, 40, 70)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
